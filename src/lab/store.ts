@@ -31,9 +31,10 @@ const db = () => dbp ??= new Promise((ok, no) => {
   r.onsuccess = () => ok(r.result);
   r.onerror = () => no(r.error);
 });
+/** Resolves once the transaction commits, so a write the browser drops at commit (storage full) is an error, not a lost take. */
 async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  const s = (await db()).transaction('takes', mode).objectStore('takes');
-  return new Promise((ok, no) => { const r = fn(s); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+  const t = (await db()).transaction('takes', mode), r = fn(t.objectStore('takes'));
+  return new Promise((ok, no) => { t.oncomplete = () => ok(r.result); t.onabort = t.onerror = () => no(t.error ?? r.error); });
 }
 
 export const browser = {

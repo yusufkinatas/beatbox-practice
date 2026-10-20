@@ -12,7 +12,7 @@ import { browser, store } from './store.ts';
 const cfg = structuredClone(cfgJson) as Config, model = modelJson as unknown as Model, audit = auditJson as Audit;
 const DEV = import.meta.env.DEV;
 type Mode = 'judge' | 'record' | 'pro' | 'takes';
-type Take = { id: number; x: Float32Array; sr: number; v: Verdict; path?: string; thumb?: 'up' | 'down'; saving?: boolean };
+type Take = { id: number; x: Float32Array; sr: number; v: Verdict; level: number; batch?: number; path?: string; thumb?: 'up' | 'down'; saving?: boolean };
 type ProClip = { file: string; sound: Sound; source: string; url: string; time: number; x?: Float32Array; sr?: number; v?: Verdict };
 
 const MISTAKES: Record<string, { label: string; sounds: Sound[] }> = {
@@ -35,7 +35,7 @@ const S = {
   level: 3,
   device: (saved.device ?? (matchMedia('(pointer: coarse)').matches ? 'phone' : 'laptop')) as 'phone' | 'laptop',
   hits: [] as Take[],
-  rec: { role: 'bad' as 'bad' | 'off', sound: 'B' as Sound, mistake: 'vowel', kind: 'clap', count: 5, done: 0, takes: [] as Take[] },
+  rec: { role: 'bad' as 'bad' | 'off', sound: 'B' as Sound, mistake: 'vowel', kind: 'clap', count: 5, done: 0, batch: 0, takes: [] as Take[] },
   files: [] as string[],
   pro: [] as ProClip[],
   review: {} as Record<string, 'approved' | 'rejected'>,
@@ -63,7 +63,7 @@ async function listen(on: boolean) {
 function onHit(x: Float32Array, sr: number) {
   const rec = S.mode === 'record';
   const target = rec ? (S.rec.role === 'bad' ? S.rec.sound : null) : S.target;
-  const t: Take = { id: nextId++, x, sr, v: judge(x, sr, { model, cfg, audit, target, level: rec ? 3 : S.level }) };
+  const level = rec ? 3 : S.level, t: Take = { id: nextId++, x, sr, level, batch: S.rec.batch, v: judge(x, sr, { model, cfg, audit, target, level }) };
   if (!rec) { S.hits.unshift(t); S.hits.length = Math.min(S.hits.length, 30); render(); return; }
   const r = S.rec, label = r.role === 'bad' ? `${r.sound}-${r.mistake}` : r.kind;
   t.path = `${r.role}/${label}/${S.device}-${stamp()}.wav`;
@@ -89,14 +89,15 @@ async function saveTake(t: Take, meta: object) {
 }
 async function deleteTake(t: Take) {
   await store.remove(t.path!); await store.remove(t.path!.replace(/\.wav$/, '.json'));
-  S.rec.takes = S.rec.takes.filter(x => x !== t); S.rec.done = Math.max(0, S.rec.done - 1);
+  S.rec.takes = S.rec.takes.filter(x => x !== t);
+  if (t.batch === S.rec.batch) S.rec.done = Math.max(0, S.rec.done - 1);
   S.files = await store.list(); render();
 }
 function thumb(t: Take, which: 'up' | 'down') {
   if (t.thumb) return;
   t.thumb = which;
   t.path = `unlabelled/${t.v.target ?? 'free'}/${S.device}-${stamp()}.wav`;
-  saveTake(t, { role: 'unlabelled', target: t.v.target, level: S.level, thumb: which });
+  saveTake(t, { role: 'unlabelled', target: t.v.target, level: t.level, thumb: which });
 }
 
 /* ---------- pro clips (dev server only: they live in testset/, never deployed) ---------- */
@@ -263,7 +264,7 @@ document.addEventListener('click', e => {
   const a = b.dataset.act!, [k, v] = a.split('-'), t = take(b), file = b.closest<HTMLElement>('[data-file]')?.dataset.file;
   const pc = S.pro.find(c => c.file === file);
   if (a === 'listen') listen(!S.listening);
-  else if (a === 'rec') { if (!S.listening) S.rec.done = 0; listen(!S.listening); }
+  else if (a === 'rec') { if (!S.listening) { S.rec.done = 0; S.rec.batch++; } listen(!S.listening); }
   else if (k === 'target') { S.target = v === 'free' ? null : (v as Sound); render(); }
   else if (k === 'level') { S.level = Number(v); render(); }
   else if (a === 'trig+') { cfg.detector.triggerDb += 2; det = null; persist(); render(); }

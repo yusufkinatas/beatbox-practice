@@ -23,7 +23,11 @@ function testsetApi(): Plugin {
           } else if (req.method === 'PUT') {
             const parts: Buffer[] = [];
             req.on('data', (c: Buffer) => parts.push(c));
-            req.on('end', () => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, Buffer.concat(parts)); res.end('ok'); });
+            req.on('end', () => {
+              try { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, Buffer.concat(parts)); res.end('ok'); }
+              catch (e) { res.statusCode = 500; res.end(String(e)); }
+            });
+            req.on('error', e => { res.statusCode = 500; res.end(String(e)); });
           } else if (req.method === 'DELETE') { rmSync(file, { force: true }); res.end('ok'); }
           else { res.statusCode = 405; res.end(); }
         } catch (e) {

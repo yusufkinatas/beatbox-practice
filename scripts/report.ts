@@ -43,7 +43,8 @@ const proFail = proRes.filter(r => r.v.result !== 'pass');
 const MISTAKE: Record<string, string[]> = { vowel: ['vowel'], air: ['air'], voice: ['voice'], weak: ['low', 'punch'], quiet: ['loud'] };
 const bad = wavs('bad').map(f => {
   const [sound, mistake] = basename(dirname(f)).split('-') as [Sound, string], v = run(f, sound, audit);
-  const right = fails(v).some(id => MISTAKE[mistake]?.includes(id.split('.')[0])) || (mistake === 'weak' && v.vetoed === 'B' && v.result === 'wrong');
+  // Right only if the user sees the tip: a failing check shows its tip on a 'fail' verdict; a weak kick may also be the B veto.
+  const right = (v.result === 'fail' && fails(v).some(id => MISTAKE[mistake]?.includes(id.split('.')[0]))) || (mistake === 'weak' && v.vetoed === 'B' && v.result === 'wrong');
   return { f, label: `${sound}-${mistake}`, v, right };
 });
 const off = wavs('off').map(f => ({ f, kind: basename(dirname(f)), v: run(f, null, audit) })).map(r => ({ ...r, rejected: r.v.heard === 'none' }));
@@ -62,12 +63,12 @@ const s = {
   thumbs: { up: unl.filter(r => r.meta.thumb === 'up').length, down: unl.filter(r => r.meta.thumb === 'down').length },
   disabled: Object.keys(audit.disabled),
 };
-const bar = (a: number, n: number, min: number) => (n === 0 ? 'no data' : pct(a, n) >= min ? 'pass' : pct(a, n) >= 70 && min === 80 ? 'look at the failing rule' : 'FAIL');
+const bar = (a: number, n: number, min: number) => (n === 0 ? 'no data' : 100 * a / n >= min ? 'pass' : 100 * a / n >= 70 ? 'look at the failing rule' : 'FAIL');
 const go = {
   pro: s.pro.n === 0 ? 'no data' : s.pro.pass === s.pro.n ? 'pass' : 'FAIL',
   bad: bar(s.bad.flagged, s.bad.n, 80),
   off: bar(s.off.rejected, s.off.n, 80),
-  unsure: s.unsure.n === 0 ? 'no data' : pct(unsure, s.unsure.n) <= 10 ? 'pass' : 'FAIL',
+  unsure: s.unsure.n === 0 ? 'no data' : 100 * unsure / s.unsure.n <= 10 ? 'pass' : 'FAIL',
 };
 const passes = Object.values(go).every(g => g === 'pass');
 if (asJson) { console.log(JSON.stringify({ passes, go, ...s })); process.exit(0); }
