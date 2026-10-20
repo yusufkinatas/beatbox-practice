@@ -1,14 +1,35 @@
 # Beatbox Practice: plan for v1, the sound coach
 
-Agreed with the owner on 2026-10-20 in a design interview. Nothing in this plan is implemented yet. Start at "Build order", step 1.
+Agreed with the owner on 2026-10-20 in a design interview. Steps 1 and 2 of "Build order" are done (2026-10-20). Step 3 waits on the owner: approve the pro clips and record the test set (see "Next: what the owner does").
 
 ## Where things stand
 
-- `index.html` is v0: a working single-file timing trainer (vanilla JS, Web Audio, AudioWorklet from a Blob URL). It learns the user's own B / t / K (8 samples each, kNN on 8 spectral features), then scores timing and "sound match" per step against a metronome. It went through 3 review rounds and matches the v0 design closely.
-- `selftest.mjs` tests v0's pure logic block (`node selftest.mjs`, 25 tests).
-- `DESIGN.md` is the v0 design spec (the "Step Deck" look). The design canvas is the Artifact https://claude.ai/artifact/56x72RiPzkVas9YBoyQLSA (artboards in `project/*.dc.html`).
-- Vercel project `beatbox-practice` (scope `yusuf-kinatas-projects`) is linked in `.vercel/`. https://beatbox-practice.vercel.app serves an early v0 build.
-- The folder is not a git repo yet.
+- **Repo:** private https://github.com/yusufkinatas/beatbox-practice, branch `main`, tag `v0` = the single-file trainer. Vercel project `beatbox-practice` (scope `yusuf-kinatas-projects`) is connected to the repo with the Vite preset (`vercel.json`). Every push to `main` deploys https://beatbox-practice.vercel.app.
+- **v0** (`index.html`, `selftest.mjs`, `DESIGN.md`) is unchanged and still served at `/`. The design canvas is the Artifact https://claude.ai/artifact/56x72RiPzkVas9YBoyQLSA.
+- **Judge prototype** at `/judge/` (`judge/index.html`, `src/lab/`): live judging with verdict, tips, the "Why?" view and thumbs; record-and-label; pro clip approval (dev server only); phone export. The judge itself is `src/judge/` and is shared by the page and the Node scripts, so live judging, training and the report compute the same numbers.
+- **Identity model:** logistic regression on AVP (`src/judge/model.json`, 3.3 KB). Held out by participant: 93.0% accuracy, recall B 0.93 / t 0.93 / K 0.90, 4.3% "couldn't tell". Details: `data/avp/train-report.md` (git-ignored).
+- **Pro clips:** 78 candidates cut into `testset/pro/candidates/` (24 B, 15 t, 39 K), none approved yet. Provisional report (all candidates counted as good): 73 of 78 pass. See "Findings from step 2".
+- **Tips:** drafted from tutorials in `src/judge/tips.ts`, with sources and open questions in `TIPS.md` for the owner's review (decision 31).
+
+## Commands
+
+| What | Command |
+|---|---|
+| Dev server (saves takes into `testset/`) | `npm run dev`, then http://localhost:5173/judge/ |
+| Tests (judge, zip, v0 selftest) | `npm test` |
+| Score the judge against the go bar, run the rule audit | `npm run report` (`-- --provisional` before any pro clip is approved). Writes `testset/report.md`; the audit is saved to `src/judge/audit.json` only from approved clips. |
+| File a phone export into `testset/` | `npm run import -- ~/Downloads/beatbox-takes-....zip` |
+| Re-cut pro clip candidates (downloads are cached in `data/pro/`) | `node scripts/pro-clips.ts` (rebuilds `testset/pro/candidates/`, writes `data/pro/measures.md`) |
+| Retrain the identity model | `node scripts/avp-features.ts && python3 -P -E scripts/train.py && node scripts/avp-features.ts --check` (AVP must be unzipped in `data/avp/x/`, about 90 s) |
+
+The model's features read `detector.preMs`, `detector.triggerDb`, `analysis.*` and the measures. After changing any of those, retrain, or the model silently degrades.
+
+## Next: what the owner does
+
+1. **Approve pro clips by ear:** `npm run dev`, open http://localhost:5173/judge/, tab "Pro clips". Approve only clean, isolated hits. Listen closely to FootboxG kick 48.0 and 55.2 (they measure a 110 to 140 ms vowel tail; approving them switches `vowel.B` off until it is fixed), D-Low K 89.8 (voice), Wing t 377.6 (air) and the D-Low K hits from 175 s on (a different, shorter K style).
+2. **Record the test set** (decision 19), tab "Record": per sound, 5 takes of each mistake, about 15 off-target noises, on the laptop (dev server) and on the phone (https://beatbox-practice.vercel.app/judge/, then "Takes", "Prepare export", "Share zip", and `npm run import` on the computer).
+3. Judge honest attempts in the "Judge" tab and rate verdicts with thumbs.
+4. Then step 3 (tuning) can start: `npm run report` is the score.
 
 ## Why v1
 
@@ -93,16 +114,29 @@ v0 only checks that you repeat whatever three noises you taught it. Any noise wo
 
 ## Build order
 
-1. **Repo:** git init, tag `v0`, private GitHub repo, Vercel connected via git (decisions 27 and 28).
-2. **Judge prototype:** a bare page in the new Vite + TS project, with no designed screens. It needs:
+1. **Repo:** git init, tag `v0`, private GitHub repo, Vercel connected via git (decisions 27 and 28). **Done.**
+2. **Judge prototype:** a bare page in the new Vite + TS project, with no designed screens. **Done**, at `/judge/`. It has:
    - the live mic, with each hit cut out and judged by the rules plus the identity model, showing verdict, tips and the "Why?" view, plus thumbs
    - a record-and-label mode ("B, airy" × 5), saving to `testset/` on the dev server, or exporting from the phone
    - pro clip import with approval by ear
    - a report that scores the judge against the go bar and runs the rule audit
-3. **Tune** (decision 22) until the go bar passes. Stop and show the owner the report.
+3. **Tune** (decision 22) until the go bar passes. Stop and show the owner the report. **Waiting** on approved pro clips and the recorded test set.
 4. **Design:** extend DESIGN.md and the canvas with the sound coach (listen and copy, drill, free play, levels, "Why?" details, history, the timing-only warm-up). The owner reviews it before the build.
 5. **Build the sound coach.**
 6. Later: personal profile (decision 10), timing mode on the new judge, then patterns.
+
+## Findings from step 2
+
+How the judge works now, and what tuning should look at first.
+
+- **Hit cutting:** the worklet only forwards mic audio, and the shared `HitDetector` (`src/judge/detector.ts`) cuts hits on the main thread. The scripts use the same detector on files, so the cuts are identical (decision 26 still applies to the sound coach build). Every cut keeps 50 ms before the onset. A new hit can only start after 30 ms of quiet (`rearmMs`), otherwise a tail that wobbles around the trigger was cut into two hits.
+- **Measures** (`src/judge/analyze.ts`): voice is periodicity (pitch 90 to 500 Hz) in the 150 to 900 Hz band. A vowel frame is voiced and also has at least 30% of its energy in 300 to 3000 Hz. An air frame is unvoiced and has at least 30% of its energy above 1 kHz. Without the last two conditions, a pro kick's low boom read as a vowel tail or as air.
+- **Vetoes** (decision 5): a veto takes a sound away, and the sounds left share the model's confidence. If less than 5% is left (`vetoFloor`), the verdict is the veto ("Not a kick: no low end."). A veto on the target sound is always a wrong sound. Vetoes now: B needs `lowDb` ≥ −20, t needs a centroid ≥ 2 kHz, K needs `lowDb` ≤ −6.
+- **The model does not transfer well to pro recordings.** AVP kicks are amateur "pm" sounds with strong 600 to 1200 Hz energy, pro kicks are pure low boom, so the model alone calls most pro kicks hi-hats. The vetoes fix that (provisional pro pass rate went from 50% to 94%). The 5 provisional failures: 4 Seboom K called t or unsure, 1 Wing t unsure. A variant that ignores energy below 150 Hz fixed Seboom's K but broke Wing's t and some D-Low K, so it was not kept. K training data is thin (257 velar snares from 7 people). Augmenting AVP with mic and room EQ is the first thing to try in step 3.
+- **Off-target rejection will be weak.** `noneDist` (×1.5) hardly rejects other vocal sounds in AVP: spit snares are called B, clicks K. Expect the length rule, vetoes and new "obvious rules" to carry the off-target part of the go bar.
+- **A strong "tuh" can be called a kick** (AVP Fixed "ta" snares: 39% B), and then the B veto makes it "none", so the vowel tip may not show. Check with the owner's "tuh" takes.
+- **Rule limits** start from `data/pro/measures.md`: the strictest limit that passes every candidate with a margin, except `vowel.B` (kept at 60 ms until the FootboxG kicks are heard).
+- AVP is MacBook-mic audio. Phone mics are untested.
 
 ## Pro reference clip candidates
 

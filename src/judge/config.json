@@ -1,0 +1,18 @@
+{
+  "detector": { "triggerDb": -40, "endDb": -54, "endMs": 120, "preMs": 50, "maxMs": 800, "refractoryMs": 90, "rearmMs": 30 },
+  "analysis": { "attackMs": 40, "bodyMs": 100, "activeDb": -30, "endRunMs": 50, "lowHz": 200, "hfHz": 2000, "vowelHf": 0.35, "vowelFormant": 0.3, "airShare": 0.3, "voiceR": 0.6, "voiceGateDb": -35 },
+  "identity": { "unsureProb": 0.6, "noneScale": 1.5, "maxLengthMs": 700, "vetoFloor": 0.05 },
+  "checks": {
+    "loud": { "level": 1, "min": { "B": -38, "t": -42, "K": -38 } },
+    "vowel": { "level": 1, "max": { "B": 60, "t": 60, "K": 60 } },
+    "air": { "level": 2, "max": { "B": 100, "t": 120, "K": 160 } },
+    "voice": { "level": 3, "max": { "t": 40, "K": 90 } },
+    "low": { "level": 3, "min": { "B": -10 } },
+    "punch": { "level": 3, "min": { "B": 3 } }
+  },
+  "vetoes": {
+    "B": { "measure": "lowDb", "min": -20 },
+    "t": { "measure": "centroidKHz", "min": 2 },
+    "K": { "measure": "lowDb", "max": -6 }
+  }
+}

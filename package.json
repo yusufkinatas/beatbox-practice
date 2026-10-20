@@ -1,0 +1,18 @@
+{
+  "name": "beatbox-practice",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "node --test src/judge/judge.test.ts src/lab/zip.test.ts && node selftest.mjs",
+    "report": "node scripts/report.ts",
+    "import": "sh scripts/import.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  }
+}
